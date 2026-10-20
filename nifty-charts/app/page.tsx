@@ -14,6 +14,7 @@ const TIMEFRAMES: { label: string; value: Timeframe }[] = [
   { label: '1H', value: '1h' },
   { label: '1D', value: '1d' },
   { label: '1W', value: '1w' },
+  { label: '1M', value: '1M' },
 ];
 
 function SimulatorApp() {

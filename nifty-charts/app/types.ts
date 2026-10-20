@@ -9,7 +9,7 @@ export type DataPoint = {
   volume: number;
 };
 
-export type Timeframe = '1min' | '5min' | '15min' | '1h' | '1d' | '1w';
+export type Timeframe = '1min' | '5min' | '15min' | '1h' | '1d' | '1w' | '1M';
 
 export type OrderSide = 'BUY' | 'SELL';
 export type OrderStatus = 'OPEN' | 'FILLED' | 'CANCELLED';

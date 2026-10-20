@@ -1,6 +1,7 @@
 "use client";
 import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { DataPoint } from './types';
+export type { DataPoint };
 
 type DataContextType = {
   data: DataPoint[];

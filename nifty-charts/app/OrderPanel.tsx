@@ -23,7 +23,6 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
   const [useClickPrice, setUseClickPrice] = useState(true);
 
   const effectivePrice = useClickPrice && clickedPrice ? clickedPrice : parseFloat(price);
-  const effectiveTime = selectedCandle?.time ?? new Date().toISOString();
 
   const handleAdd = () => {
     if (!effectivePrice || isNaN(effectivePrice) || Number(qty) <= 0) return;
@@ -32,7 +31,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
       side,
       price: effectivePrice,
       qty: Number(qty),
-      time: effectiveTime,
+      time: selectedCandle?.time ?? new Date().toISOString(),
       status: 'FILLED',
     };
     onAddOrder(order);

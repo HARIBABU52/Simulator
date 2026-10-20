@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import type { DataPoint } from './DataContext';
+import type { DataPoint } from './types';
 
 type CustomChartProps = {
   data: DataPoint[];

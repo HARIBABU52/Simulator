@@ -11,6 +11,9 @@ interface TradingChartProps {
   showC2C?: boolean;
   onToggleC2C?: () => void;
   selectedCandle?: DataPoint | null;
+  isReplayActive?: boolean;
+  isSelectingBar?: boolean;
+  currentPrice?: number;
 }
 
 const COLORS = {
@@ -38,9 +41,12 @@ const TradingChart: React.FC<TradingChartProps> = ({
   orders,
   timeframe,
   onCandleClick,
-  showC2C = true,
+  showC2C = false,
   onToggleC2C,
   selectedCandle,
+  isReplayActive = false,
+  isSelectingBar = false,
+  currentPrice,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -56,6 +62,7 @@ const TradingChart: React.FC<TradingChartProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef<{ x: number; offsetX: number } | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const prevDataLenRef = useRef(data.length);
 
   const canvasWidth = useRef(1200);
   const canvasHeight = useRef(600);
@@ -231,14 +238,34 @@ const TradingChart: React.FC<TradingChartProps> = ({
       // Label
       ctx.fillStyle = markerColor;
       ctx.font = 'bold 9px Inter, sans-serif';
-      ctx.fillText(`${order.side} ${order.qty}`, x + 9, y - 2);
+      ctx.fillText(`${order.side} ${order.qty}L`, x + 9, y - 2);
+
+      // Live PnL badge on right side of line for active FILLED orders
+      if (order.status === 'FILLED' && order.pnl !== undefined) {
+        const isProfit = order.pnl >= 0;
+        const pnlText = `${isProfit ? '+' : ''}₹${Math.round(order.pnl).toLocaleString()}${order.pnlPoints !== undefined ? ` (${order.pnlPoints >= 0 ? '+' : ''}${order.pnlPoints.toFixed(1)}p)` : ''}`;
+        ctx.font = 'bold 9px Inter, monospace';
+        const btw = ctx.measureText(pnlText).width;
+        const bpw = btw + 8;
+        const bph = 16;
+        const bpx = W - PADDING.right - bpw - 4;
+        const bpy = y - bph / 2;
+
+        ctx.fillStyle = isProfit ? 'rgba(38,166,154,0.95)' : 'rgba(239,83,80,0.95)';
+        ctx.beginPath();
+        ctx.roundRect(bpx, bpy, bpw, bph, 3);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pnlText, bpx + bpw / 2, bpy + bph / 2);
+        ctx.textBaseline = 'alphabetic';
+      }
     }
 
     // ---- Draw Close to Close % indicator labels (Pine Script overlay) ----
     if (showC2C || selectedCandle) {
-      // Step to avoid label clutter when zoomed out
-      const labelStep = cw < 18 ? Math.max(1, Math.ceil(36 / stride)) : 1;
-
       visibleData.forEach((d, i) => {
         const globalIdx = firstIdx + i;
         const isSelected = selectedCandle ? selectedCandle.time === d.time : false;
@@ -246,9 +273,6 @@ const TradingChart: React.FC<TradingChartProps> = ({
 
         // If global indicator is off, only draw for selected or hovered candle
         if (!showC2C && !isSelected && !isHovered) return;
-
-        // Skip dense labels when zoomed out unless selected or hovered
-        if (showC2C && !isSelected && !isHovered && globalIdx % labelStep !== 0) return;
 
         const percent = d.c2cPercent;
         if (percent === undefined || isNaN(percent)) return;
@@ -261,10 +285,11 @@ const TradingChart: React.FC<TradingChartProps> = ({
         const isPos = percent >= 0;
         const text = `${isPos ? '+' : ''}${percent.toFixed(2)}%`;
 
-        ctx.font = 'bold 9px Inter, monospace';
+        const fontSize = Math.max(8, Math.min(10, Math.round(cw * 0.85)));
+        ctx.font = `bold ${fontSize}px Inter, monospace`;
         const tw = ctx.measureText(text).width;
-        const pw = Math.max(28, tw + 8);
-        const ph = 15;
+        const pw = Math.max(26, tw + 6);
+        const ph = fontSize + 6;
         const px = x - pw / 2;
         const py = Math.max(PADDING.top + 2, yTop - ph - 3);
 
@@ -344,6 +369,36 @@ const TradingChart: React.FC<TradingChartProps> = ({
       ctx.fillText(formatAxisTime(d.time, timeframe), x, H - PADDING.bottom + 16);
     });
 
+    // ---- Cut tool preview when selecting starting bar ----
+    if (isSelectingBar && hoveredIdx !== null && hoveredIdx >= firstIdx && hoveredIdx <= lastIdx) {
+      const hx = PADDING.left + hoveredIdx * stride - off + cw / 2;
+      ctx.save();
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(hx, PADDING.top);
+      ctx.lineTo(hx, H - PADDING.bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Top scissors badge
+      const cutText = '✂️ Click to Cut & Replay from here';
+      ctx.font = 'bold 11px Inter, sans-serif';
+      const ctw = ctx.measureText(cutText).width;
+      const cpx = Math.max(PADDING.left + 4, Math.min(W - PADDING.right - ctw - 16, hx - (ctw + 14) / 2));
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.95)';
+      ctx.beginPath();
+      ctx.roundRect(cpx, PADDING.top + 4, ctw + 14, 20, 4);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(cutText, cpx + (ctw + 14) / 2, PADDING.top + 14);
+      ctx.textBaseline = 'alphabetic';
+      ctx.restore();
+    }
+
     // ---- Crosshair + tooltip ----
     if (mousePos && hoveredIdx !== null && hoveredIdx >= firstIdx && hoveredIdx <= lastIdx) {
       const mx = mousePos.x;
@@ -415,7 +470,21 @@ const TradingChart: React.FC<TradingChartProps> = ({
         ctx.fillText(lines[3], bx + pad, by + pad + 56);
       }
     }
-  }, [data, orders, candleWidth, offsetX, hoveredIdx, mousePos, timeframe, getViewport, showC2C, selectedCandle, atrValues]);
+  }, [data, orders, candleWidth, offsetX, hoveredIdx, mousePos, timeframe, getViewport, showC2C, selectedCandle, atrValues, isReplayActive, isSelectingBar, currentPrice]);
+
+  // Auto-scroll when replay advances or when cut is selected
+  useEffect(() => {
+    if (isReplayActive) {
+      const totalWidth = data.length * (candleWidth + 2);
+      const viewWidth = canvasWidth.current - PADDING.left - PADDING.right;
+      if (totalWidth > viewWidth) {
+        setOffsetX(clampOffset(totalWidth - viewWidth, candleWidth, canvasWidth.current));
+      } else {
+        setOffsetX(0);
+      }
+    }
+    prevDataLenRef.current = data.length;
+  }, [data.length, isReplayActive, candleWidth, clampOffset]);
 
   // Resize observer
   useEffect(() => {

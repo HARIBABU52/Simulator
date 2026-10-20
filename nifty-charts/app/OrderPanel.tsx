@@ -8,6 +8,11 @@ interface OrderPanelProps {
   orders: Order[];
   onAddOrder: (order: Order) => void;
   onCancelOrder: (id: string) => void;
+  onCloseOrder?: (id: string) => void;
+  onStartReplayFromCandle?: (candle: DataPoint) => void;
+  currentPrice?: number;
+  currentCandle?: DataPoint | null;
+  isReplayActive?: boolean;
 }
 
 const OrderPanel: React.FC<OrderPanelProps> = ({
@@ -16,23 +21,49 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
   orders,
   onAddOrder,
   onCancelOrder,
+  onCloseOrder,
+  onStartReplayFromCandle,
+  currentPrice,
+  currentCandle,
+  isReplayActive = false,
 }) => {
   const [side, setSide] = useState<OrderSide>('BUY');
   const [qty, setQty] = useState<string>('1');
   const [price, setPrice] = useState<string>('');
   const [useClickPrice, setUseClickPrice] = useState(true);
 
-  const effectivePrice = useClickPrice && clickedPrice ? clickedPrice : parseFloat(price);
+  // If in replay mode and not using click price or no click price, default to current replay price
+  const activePrice = isReplayActive && currentPrice ? currentPrice : clickedPrice;
+  const effectivePrice = useClickPrice && activePrice ? activePrice : parseFloat(price);
 
   const handleAdd = () => {
     if (!effectivePrice || isNaN(effectivePrice) || Number(qty) <= 0) return;
+    const orderTime = isReplayActive && currentCandle ? currentCandle.time : (selectedCandle?.time ?? new Date().toISOString());
     const order: Order = {
       id: `ord_${Date.now()}`,
       side,
       price: effectivePrice,
       qty: Number(qty),
-      time: selectedCandle?.time ?? new Date().toISOString(),
+      time: orderTime,
       status: 'FILLED',
+      pnl: 0,
+      pnlPoints: 0,
+    };
+    onAddOrder(order);
+  };
+
+  const handleQuickMarket = (quickSide: OrderSide) => {
+    if (!currentPrice || Number(qty) <= 0) return;
+    const orderTime = currentCandle ? currentCandle.time : new Date().toISOString();
+    const order: Order = {
+      id: `ord_${Date.now()}`,
+      side: quickSide,
+      price: currentPrice,
+      qty: Number(qty),
+      time: orderTime,
+      status: 'FILLED',
+      pnl: 0,
+      pnlPoints: 0,
     };
     onAddOrder(order);
   };
@@ -78,6 +109,15 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
               <span>L: {selectedCandle.low.toFixed(1)}</span>
               <span>C: {selectedCandle.close.toFixed(1)}</span>
             </div>
+            {onStartReplayFromCandle && (
+              <button
+                className="replay-from-candle-btn"
+                onClick={() => onStartReplayFromCandle(selectedCandle)}
+                title="Cut subsequent candles and start replay from this selected candle"
+              >
+                ✂️ Replay From This Candle (Hide Future)
+              </button>
+            )}
           </div>
         )}
 
@@ -110,7 +150,6 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
           </div>
         </div>
 
-        {/* Qty */}
         <div className="form-group">
           <label>Quantity (Lots)</label>
           <input
@@ -122,6 +161,25 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
           />
         </div>
 
+        {isReplayActive && currentPrice && (
+          <div className="quick-market-group">
+            <button
+              className="quick-mkt-btn buy"
+              onClick={() => handleQuickMarket('BUY')}
+              title="Instant Market Buy at current replay price"
+            >
+              ▲ Buy Mkt ({qty}L)
+            </button>
+            <button
+              className="quick-mkt-btn sell"
+              onClick={() => handleQuickMarket('SELL')}
+              title="Instant Market Sell at current replay price"
+            >
+              ▼ Sell Mkt ({qty}L)
+            </button>
+          </div>
+        )}
+
         <button className={`submit-btn ${side === 'BUY' ? 'buy' : 'sell'}`} onClick={handleAdd}>
           {side === 'BUY' ? '▲ Place Buy Order' : '▼ Place Sell Order'}
         </button>
@@ -129,31 +187,52 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
 
       {/* Orders list */}
       <div className="orders-list">
-        <div className="orders-header">Orders ({orders.length})</div>
-        {orders.length === 0 && <div className="empty-msg">No orders yet. Click a candle to place one.</div>}
+        <div className="orders-header">
+          <span>Orders ({orders.length})</span>
+          {isReplayActive && currentPrice && (
+            <span className="replay-active-tag">● Replay Live</span>
+          )}
+        </div>
+        {orders.length === 0 && <div className="empty-msg">No orders yet. Place an order or click Buy/Sell.</div>}
         {orders.map(o => (
-          <div key={o.id} className={`order-item ${o.side.toLowerCase()}`}>
+          <div key={o.id} className={`order-item ${o.side.toLowerCase()} ${o.status.toLowerCase()}`}>
             <div className="order-row">
               <span className={`order-side ${o.side === 'BUY' ? 'buy-text' : 'sell-text'}`}>
                 {o.side === 'BUY' ? '▲' : '▼'} {o.side}
               </span>
               <span className="order-price">₹{o.price.toFixed(1)}</span>
               <span className="order-qty">×{o.qty}</span>
-              <span className={`order-status ${o.status.toLowerCase()}`}>{o.status}</span>
-              {o.pnl !== undefined && (
+              <span className={`order-status ${o.status.toLowerCase()}`}>
+                {o.status === 'FILLED' ? 'OPEN' : o.status}
+              </span>
+              {o.pnl !== undefined && o.status !== 'CANCELLED' && (
                 <span className={`order-pnl ${o.pnl >= 0 ? 'profit' : 'loss'}`}>
-                  {o.pnl >= 0 ? '+' : ''}{o.pnl.toFixed(0)}
+                  {o.pnl >= 0 ? '+' : ''}₹{Math.round(o.pnl).toLocaleString()}
+                  {o.pnlPoints !== undefined && (
+                    <span className="pnl-pts"> ({o.pnlPoints >= 0 ? '+' : ''}{o.pnlPoints.toFixed(1)}p)</span>
+                  )}
                 </span>
               )}
             </div>
-            <div className="order-time">
-              {new Date(o.time).toLocaleString('en-IN', {
-                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
-              })}
+            <div className="order-time-row">
+              <span className="order-time">
+                {new Date(o.time).toLocaleString('en-IN', {
+                  day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+                })}
+              </span>
+              {o.status === 'FILLED' && onCloseOrder && (
+                <button
+                  className="close-pos-btn"
+                  onClick={() => onCloseOrder(o.id)}
+                  title="Close position at current replay price"
+                >
+                  Exit Pos
+                </button>
+              )}
+              {o.status === 'OPEN' && (
+                <button className="cancel-btn" onClick={() => onCancelOrder(o.id)}>✕</button>
+              )}
             </div>
-            {o.status !== 'CANCELLED' && (
-              <button className="cancel-btn" onClick={() => onCancelOrder(o.id)}>✕</button>
-            )}
           </div>
         ))}
       </div>

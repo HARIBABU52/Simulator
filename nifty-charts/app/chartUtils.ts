@@ -42,31 +42,22 @@ export function aggregateCandles(data: DataPoint[], tf: Timeframe): DataPoint[] 
 
   const buckets = new Map<number, DataPoint[]>();
 
-  if (tf === '1M') {
-    for (const d of data) {
-      const dt = new Date(d.time);
-      const bucket = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1);
-      if (!buckets.has(bucket)) buckets.set(bucket, []);
-      buckets.get(bucket)!.push(d);
-    }
-  } else {
-    const msMap: Record<Exclude<Timeframe, '1M'>, number> = {
-      '1min': 60_000,
-      '5min': 5 * 60_000,
-      '15min': 15 * 60_000,
-      '1h': 60 * 60_000,
-      '1d': 24 * 60 * 60_000,
-      '1w': 7 * 24 * 60 * 60_000,
-    };
+  const msMap: Record<Timeframe, number> = {
+    '1min': 60_000,
+    '5min': 5 * 60_000,
+    '15min': 15 * 60_000,
+    '1h': 60 * 60_000,
+    '1d': 24 * 60 * 60_000,
+    '1w': 7 * 24 * 60 * 60_000,
+  };
 
-    const bucketMs = msMap[tf];
+  const bucketMs = msMap[tf];
 
-    for (const d of data) {
-      const t = new Date(d.time).getTime();
-      const bucket = Math.floor(t / bucketMs) * bucketMs;
-      if (!buckets.has(bucket)) buckets.set(bucket, []);
-      buckets.get(bucket)!.push(d);
-    }
+  for (const d of data) {
+    const t = new Date(d.time).getTime();
+    const bucket = Math.floor(t / bucketMs) * bucketMs;
+    if (!buckets.has(bucket)) buckets.set(bucket, []);
+    buckets.get(bucket)!.push(d);
   }
 
   const result: DataPoint[] = [];
@@ -90,9 +81,6 @@ export function aggregateCandles(data: DataPoint[], tf: Timeframe): DataPoint[] 
 // Format timestamp for axis labels
 export function formatAxisTime(isoTime: string, tf: Timeframe): string {
   const d = new Date(isoTime);
-  if (tf === '1M') {
-    return d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
-  }
   if (tf === '1d' || tf === '1w') {
     return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
   }
@@ -105,9 +93,6 @@ export function formatAxisTime(isoTime: string, tf: Timeframe): string {
 // Format tooltip time
 export function formatTooltipTime(isoTime: string, tf: Timeframe): string {
   const d = new Date(isoTime);
-  if (tf === '1M') {
-    return d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-  }
   if (tf === '1d' || tf === '1w') {
     return d.toLocaleDateString('en-IN', { weekday: 'short', year: 'numeric', month: 'short', day: '2-digit' });
   }

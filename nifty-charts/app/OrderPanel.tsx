@@ -197,6 +197,20 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
         {orders.map(o => (
           <div key={o.id} className={`order-item ${o.side.toLowerCase()} ${o.status.toLowerCase()}`}>
             <div className="order-row">
+              {o.symbol && (
+                <span className="order-symbol-tag" style={{
+                  fontSize: '10px',
+                  background: 'rgba(99, 102, 241, 0.25)',
+                  border: '1px solid rgba(99, 102, 241, 0.4)',
+                  padding: '1px 5px',
+                  borderRadius: '3px',
+                  color: '#a5b4fc',
+                  fontFamily: 'monospace',
+                  fontWeight: 700
+                }}>
+                  {o.symbol.replace('NIFTY 27OCT ', '')}
+                </span>
+              )}
               <span className={`order-side ${o.side === 'BUY' ? 'buy-text' : 'sell-text'}`}>
                 {o.side === 'BUY' ? '▲' : '▼'} {o.side}
               </span>

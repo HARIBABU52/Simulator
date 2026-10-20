@@ -6,6 +6,7 @@ import OrderPanel from './OrderPanel';
 import StrategyPanel from './StrategyPanel';
 import { DataPoint, Order, Timeframe } from './types';
 import { TanStackCacheButton } from './TanStackCacheModal';
+import OptionChain from './OptionChain';
 
 const TIMEFRAMES: { label: string; value: Timeframe }[] = [
   { label: '1m', value: '1min' },
@@ -14,7 +15,6 @@ const TIMEFRAMES: { label: string; value: Timeframe }[] = [
   { label: '1H', value: '1h' },
   { label: '1D', value: '1d' },
   { label: '1W', value: '1w' },
-  { label: '1M', value: '1M' },
 ];
 
 function SimulatorApp() {
@@ -25,6 +25,8 @@ function SimulatorApp() {
   const [selectedCandle, setSelectedCandle] = useState<DataPoint | null>(null);
   const [clickedPrice, setClickedPrice] = useState<number | null>(null);
   const [rightPanel, setRightPanel] = useState<'orders' | 'strategy'>('orders');
+  const [showOptionChain, setShowOptionChain] = useState<boolean>(true);
+  const [isStrategyExpanded, setIsStrategyExpanded] = useState<boolean>(false);
 
   // Replay State
   const [isReplayActive, setIsReplayActive] = useState<boolean>(false);
@@ -128,6 +130,10 @@ function SimulatorApp() {
     setOrders(prev => [...prev, order]);
   }, []);
 
+  const handleAddOrders = useCallback((newOrders: Order[]) => {
+    setOrders(prev => [...prev, ...newOrders]);
+  }, []);
+
   const handleCloseOrder = useCallback((id: string) => {
     setOrders(prev => prev.map(o => {
       if (o.id !== id || o.status !== 'FILLED') return o;
@@ -199,6 +205,16 @@ function SimulatorApp() {
           >
             <span>⏪</span>
             <span>Replay</span>
+          </button>
+
+          {/* Option Chain Toggle */}
+          <button
+            className={`chain-toggle-btn ${showOptionChain ? 'active' : ''}`}
+            onClick={() => setShowOptionChain(p => !p)}
+            title="Toggle Indian NSE Option Chain below chart"
+          >
+            <span>⛓️</span>
+            <span>Option Chain</span>
           </button>
 
           {/* TanStack Query Cache State Inspector */}
@@ -338,32 +354,46 @@ function SimulatorApp() {
       )}
 
       <div className="workspace">
-        {/* Chart area */}
-        <div className="chart-area">
-          {loading && (
-            <div className="chart-loading">
-              <div className="spinner" />
-              <span>Loading NIFTY data...</span>
-            </div>
-          )}
-          {!loading && (
-            <TradingChart
-              data={displayData}
-              orders={liveOrders}
-              timeframe={timeframe}
-              onCandleClick={handleCandleClick}
-              showC2C={showC2C}
-              onToggleC2C={() => setShowC2C(p => !p)}
-              selectedCandle={selectedCandle}
-              isReplayActive={isReplayActive}
-              isSelectingBar={isSelectingBar}
+        {/* Chart area container with Option Chain below */}
+        <div className="chart-area-container">
+          <div className={`chart-area ${showOptionChain ? 'with-chain' : ''}`}>
+            {loading && (
+              <div className="chart-loading">
+                <div className="spinner" />
+                <span>Loading NIFTY data...</span>
+              </div>
+            )}
+            {!loading && (
+              <TradingChart
+                data={displayData}
+                orders={liveOrders}
+                timeframe={timeframe}
+                onCandleClick={handleCandleClick}
+                showC2C={showC2C}
+                onToggleC2C={() => setShowC2C(p => !p)}
+                selectedCandle={selectedCandle}
+                isReplayActive={isReplayActive}
+                isSelectingBar={isSelectingBar}
+                currentPrice={currentPrice}
+              />
+            )}
+          </div>
+
+          {/* Authentic Indian Option Chain below chart */}
+          {showOptionChain && (
+            <OptionChain
               currentPrice={currentPrice}
+              currentCandle={currentCandle}
+              timeframe={timeframe}
+              onClose={() => setShowOptionChain(false)}
+              onAddOrder={handleAddOrder}
+              isReplayActive={isReplayActive}
             />
           )}
         </div>
 
         {/* Right panel */}
-        <aside className="right-panel">
+        <aside className={`right-panel ${rightPanel === 'strategy' ? 'strategy-mode' : ''} ${isStrategyExpanded && rightPanel === 'strategy' ? 'expanded' : ''}`}>
           {rightPanel === 'orders' ? (
             <OrderPanel
               selectedCandle={selectedCandle}
@@ -381,6 +411,15 @@ function SimulatorApp() {
             <StrategyPanel
               orders={liveOrders}
               onClearOrders={handleClearOrders}
+              onAddOrder={handleAddOrder}
+              onAddOrders={handleAddOrders}
+              onCloseOrder={handleCloseOrder}
+              currentPrice={currentPrice}
+              currentCandle={currentCandle}
+              timeframe={timeframe}
+              isReplayActive={isReplayActive}
+              isExpanded={isStrategyExpanded}
+              onToggleExpand={() => setIsStrategyExpanded(p => !p)}
             />
           )}
         </aside>

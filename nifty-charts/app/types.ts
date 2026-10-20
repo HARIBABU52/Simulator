@@ -10,7 +10,7 @@ export type DataPoint = {
   c2cPercent?: number;
 };
 
-export type Timeframe = '1min' | '5min' | '15min' | '1h' | '1d' | '1w' | '1M';
+export type Timeframe = '1min' | '5min' | '15min' | '1h' | '1d' | '1w';
 
 export type OrderSide = 'BUY' | 'SELL';
 export type OrderStatus = 'OPEN' | 'FILLED' | 'CLOSED' | 'CANCELLED';
@@ -26,6 +26,20 @@ export type Order = {
   pnlPoints?: number; // pnl in index points
   exitPrice?: number;
   exitTime?: string;
+  symbol?: string;
+  strike?: number;
+  optionType?: 'CE' | 'PE';
+  strategyId?: string;
+  strategyName?: string;
+};
+
+export type StrategyLeg = {
+  id: string;
+  side: OrderSide;
+  strike: number;
+  optionType: 'CE' | 'PE';
+  qty: number; // lots
+  price: number;
 };
 
 export type StrategyStats = {

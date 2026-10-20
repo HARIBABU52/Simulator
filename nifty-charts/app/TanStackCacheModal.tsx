@@ -39,7 +39,6 @@ const TIMEFRAMES: { label: string; value: Timeframe }[] = [
   { label: "1H", value: "1h" },
   { label: "1D", value: "1d" },
   { label: "1W", value: "1w" },
-  { label: "1M", value: "1M" },
 ];
 
 export function TanStackCacheButton({ currentTimeframe }: { currentTimeframe: Timeframe }) {
@@ -47,12 +46,19 @@ export function TanStackCacheButton({ currentTimeframe }: { currentTimeframe: Ti
   const queryClient = useQueryClient();
   const [, setTick] = useState(0);
 
-  // Subscribe to TanStack Query Cache events so states re-render reactively
+  // Subscribe to TanStack Query Cache events so states re-render reactively (deferred to avoid setState during render)
   useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const unsubscribe = queryClient.getQueryCache().subscribe(() => {
-      setTick(t => t + 1);
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setTick(t => t + 1);
+      }, 0);
     });
-    return () => unsubscribe();
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      unsubscribe();
+    };
   }, [queryClient]);
 
   // Compute how many timeframes are cached

@@ -20,6 +20,7 @@ const TIMEFRAMES: { label: string; value: Timeframe }[] = [
 function SimulatorApp() {
   const { data, loading } = useData();
   const [timeframe, setTimeframe] = useState<Timeframe>('1min');
+  const [showC2C, setShowC2C] = useState<boolean>(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedCandle, setSelectedCandle] = useState<DataPoint | null>(null);
   const [clickedPrice, setClickedPrice] = useState<number | null>(null);
@@ -72,6 +73,18 @@ function SimulatorApp() {
               </button>
             ))}
           </div>
+
+          {/* Indicators toggle */}
+          <div className="indicators-group">
+            <button
+              className={`indicator-btn ${showC2C ? 'active' : ''}`}
+              onClick={() => setShowC2C(prev => !prev)}
+              title={showC2C ? "Hide Close to Close % Indicator (Pine Script)" : "Show Close to Close % Indicator (Pine Script)"}
+            >
+              <span className="indicator-badge">%</span>
+              <span>C2C %</span>
+            </button>
+          </div>
         </div>
 
         {/* Market info */}
@@ -117,6 +130,9 @@ function SimulatorApp() {
               orders={orders}
               timeframe={timeframe}
               onCandleClick={handleCandleClick}
+              showC2C={showC2C}
+              onToggleC2C={() => setShowC2C(p => !p)}
+              selectedCandle={selectedCandle}
             />
           )}
         </div>

@@ -1,8 +1,44 @@
 import { DataPoint, Timeframe } from './types';
 
+// Calculate ATR (Average True Range)
+export function calculateATR(data: DataPoint[], period: number = 14): number[] {
+  const atrs: number[] = new Array(data.length).fill(0);
+  if (data.length === 0) return atrs;
+
+  let trSum = 0;
+  for (let i = 0; i < data.length; i++) {
+    const cur = data[i];
+    const prev = i > 0 ? data[i - 1] : null;
+    const tr = prev
+      ? Math.max(cur.high - cur.low, Math.abs(cur.high - prev.close), Math.abs(cur.low - prev.close))
+      : cur.high - cur.low;
+
+    if (i < period) {
+      trSum += tr;
+      atrs[i] = trSum / (i + 1);
+    } else {
+      atrs[i] = (atrs[i - 1] * (period - 1) + tr) / period;
+    }
+  }
+  return atrs;
+}
+
+// Calculate Close-to-Close percentage: (close - close[1]) / close[1] * 100
+export function attachC2C(candles: DataPoint[]): DataPoint[] {
+  for (let i = 0; i < candles.length; i++) {
+    const prev = i > 0 ? candles[i - 1] : null;
+    if (prev && prev.close !== 0) {
+      candles[i].c2cPercent = ((candles[i].close - prev.close) / prev.close) * 100;
+    } else {
+      candles[i].c2cPercent = undefined;
+    }
+  }
+  return candles;
+}
+
 // Aggregate 1-min candles into higher timeframes
 export function aggregateCandles(data: DataPoint[], tf: Timeframe): DataPoint[] {
-  if (tf === '1min') return data;
+  if (tf === '1min') return attachC2C(data);
 
   const buckets = new Map<number, DataPoint[]>();
 
@@ -48,7 +84,7 @@ export function aggregateCandles(data: DataPoint[], tf: Timeframe): DataPoint[] 
     });
   }
 
-  return result;
+  return attachC2C(result);
 }
 
 // Format timestamp for axis labels

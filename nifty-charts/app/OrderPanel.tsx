@@ -60,7 +60,14 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
         {/* Selected candle info */}
         {selectedCandle && (
           <div className="candle-info">
-            <span className="ci-label">Selected Candle</span>
+            <div className="ci-header-row">
+              <span className="ci-label">Selected Candle</span>
+              {selectedCandle.c2cPercent !== undefined && (
+                <span className={`c2c-pill ${selectedCandle.c2cPercent >= 0 ? 'pos' : 'neg'}`}>
+                  C2C: {selectedCandle.c2cPercent >= 0 ? '+' : ''}{selectedCandle.c2cPercent.toFixed(2)}%
+                </span>
+              )}
+            </div>
             <span className="ci-value">{new Date(selectedCandle.time).toLocaleString('en-IN', {
               day: '2-digit', month: 'short', year: 'numeric',
               hour: '2-digit', minute: '2-digit', hour12: false,

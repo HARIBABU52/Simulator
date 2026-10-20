@@ -7,6 +7,7 @@ export type DataPoint = {
   low: number;
   close: number;
   volume: number;
+  c2cPercent?: number;
 };
 
 export type Timeframe = '1min' | '5min' | '15min' | '1h' | '1d' | '1w' | '1M';

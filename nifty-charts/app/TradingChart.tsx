@@ -1,13 +1,16 @@
 "use client";
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { DataPoint, Order, Timeframe } from './types';
-import { formatAxisTime, formatTooltipTime } from './chartUtils';
+import { calculateATR, formatAxisTime, formatTooltipTime } from './chartUtils';
 
 interface TradingChartProps {
   data: DataPoint[];
   orders: Order[];
   timeframe: Timeframe;
   onCandleClick?: (candle: DataPoint, price: number) => void;
+  showC2C?: boolean;
+  onToggleC2C?: () => void;
+  selectedCandle?: DataPoint | null;
 }
 
 const COLORS = {
@@ -30,9 +33,20 @@ const COLORS = {
 const PADDING = { top: 20, right: 80, bottom: 60, left: 12 };
 const VOLUME_HEIGHT_RATIO = 0.18; // bottom 18% for volume
 
-const TradingChart: React.FC<TradingChartProps> = ({ data, orders, timeframe, onCandleClick }) => {
+const TradingChart: React.FC<TradingChartProps> = ({
+  data,
+  orders,
+  timeframe,
+  onCandleClick,
+  showC2C = true,
+  onToggleC2C,
+  selectedCandle,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Precompute ATR(14) for Pine Script label spacing
+  const atrValues = useMemo(() => calculateATR(data, 14), [data]);
 
   // View state
   const [candleWidth, setCandleWidth] = useState(9);
@@ -220,6 +234,92 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, orders, timeframe, on
       ctx.fillText(`${order.side} ${order.qty}`, x + 9, y - 2);
     }
 
+    // ---- Draw Close to Close % indicator labels (Pine Script overlay) ----
+    if (showC2C || selectedCandle) {
+      // Step to avoid label clutter when zoomed out
+      const labelStep = cw < 18 ? Math.max(1, Math.ceil(36 / stride)) : 1;
+
+      visibleData.forEach((d, i) => {
+        const globalIdx = firstIdx + i;
+        const isSelected = selectedCandle ? selectedCandle.time === d.time : false;
+        const isHovered = hoveredIdx === globalIdx;
+
+        // If global indicator is off, only draw for selected or hovered candle
+        if (!showC2C && !isSelected && !isHovered) return;
+
+        // Skip dense labels when zoomed out unless selected or hovered
+        if (showC2C && !isSelected && !isHovered && globalIdx % labelStep !== 0) return;
+
+        const percent = d.c2cPercent;
+        if (percent === undefined || isNaN(percent)) return;
+
+        const x = PADDING.left + globalIdx * stride - off + cw / 2;
+        const atr = atrValues[globalIdx] || (d.high - d.low);
+        const offset = Math.max(1, atr) * 0.5; // spacing = 0.5 (Pine Script)
+        const yTop = priceToY(d.high + offset);
+
+        const isPos = percent >= 0;
+        const text = `${isPos ? '+' : ''}${percent.toFixed(2)}%`;
+
+        ctx.font = 'bold 9px Inter, monospace';
+        const tw = ctx.measureText(text).width;
+        const pw = Math.max(28, tw + 8);
+        const ph = 15;
+        const px = x - pw / 2;
+        const py = Math.max(PADDING.top + 2, yTop - ph - 3);
+
+        // Soft colors from Pine Script:
+        // positive: rgb(190, 225, 198) with alpha
+        // negative: rgb(240, 195, 195) with alpha
+        // textColor: rgb(45, 50, 55)
+        const bg = isPos ? 'rgba(190, 225, 198, 0.95)' : 'rgba(240, 195, 195, 0.95)';
+        ctx.fillStyle = bg;
+
+        // Pill rounded rect
+        ctx.beginPath();
+        ctx.roundRect(px, py, pw, ph, 3);
+        ctx.fill();
+
+        if (isSelected) {
+          ctx.strokeStyle = '#6366f1';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+
+        // Downward pointer tip (label.style_label_down)
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.moveTo(x - 3, py + ph);
+        ctx.lineTo(x + 3, py + ph);
+        ctx.lineTo(x, py + ph + 3);
+        ctx.closePath();
+        ctx.fill();
+
+        // Label text
+        ctx.fillStyle = '#2d3237';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, x, py + ph / 2);
+      });
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    // Highlight selected candle on chart
+    if (selectedCandle) {
+      const selIdx = data.findIndex(d => d.time === selectedCandle.time);
+      if (selIdx >= firstIdx && selIdx <= lastIdx) {
+        const sx = PADDING.left + selIdx * stride - off + cw / 2;
+        const sd = data[selIdx];
+        const yHigh = priceToY(sd.high);
+        const yLow = priceToY(sd.low);
+        ctx.strokeStyle = '#818cf8';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 2]);
+        ctx.strokeRect(sx - cw / 2 - 2, yHigh - 3, cw + 4, Math.max(6, yLow - yHigh + 6));
+        ctx.setLineDash([]);
+      }
+    }
+
     ctx.restore();
 
     // ---- Y-axis price labels ----
@@ -278,11 +378,14 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, orders, timeframe, on
       const d = data[hoveredIdx];
       if (d) {
         const isBull = d.close >= d.open;
+        const c2cStr = d.c2cPercent !== undefined
+          ? `${d.c2cPercent >= 0 ? '+' : ''}${d.c2cPercent.toFixed(2)}%`
+          : '—';
         const lines = [
           formatTooltipTime(d.time, timeframe),
           `O: ${d.open.toFixed(1)}  H: ${d.high.toFixed(1)}`,
           `L: ${d.low.toFixed(1)}  C: ${d.close.toFixed(1)}`,
-          `Vol: ${d.volume > 0 ? d.volume.toLocaleString() : 'N/A'}`,
+          `C2C: ${c2cStr} · Vol: ${d.volume > 0 ? d.volume.toLocaleString() : 'N/A'}`,
         ];
         const boxW = 210, boxH = 76, pad = 10;
         let bx = mx + 14;
@@ -312,7 +415,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, orders, timeframe, on
         ctx.fillText(lines[3], bx + pad, by + pad + 56);
       }
     }
-  }, [data, orders, candleWidth, offsetX, hoveredIdx, mousePos, timeframe, getViewport]);
+  }, [data, orders, candleWidth, offsetX, hoveredIdx, mousePos, timeframe, getViewport, showC2C, selectedCandle, atrValues]);
 
   // Resize observer
   useEffect(() => {
@@ -423,11 +526,43 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, orders, timeframe, on
     }
   }, [candleWidth, clampOffset]);
 
+  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onCandleClick) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const cw = candleWidth;
+    const stride = cw + 2;
+    const chartX = mx - PADDING.left + offsetX;
+    const idx = Math.floor(chartX / stride);
+    if (idx >= 0 && idx < data.length) {
+      const d = data[idx];
+      const chartH = canvas.height - PADDING.top - PADDING.bottom;
+      const volH = chartH * VOLUME_HEIGHT_RATIO;
+      const priceH = chartH - volH;
+      const visStart = Math.max(0, Math.floor(offsetX / stride));
+      const visEnd = Math.min(data.length - 1, visStart + Math.ceil((canvasWidth.current - PADDING.left - PADDING.right) / stride));
+      let minP = Infinity, maxP = -Infinity;
+      for (let i = visStart; i <= visEnd; i++) {
+        if (data[i].low < minP) minP = data[i].low;
+        if (data[i].high > maxP) maxP = data[i].high;
+      }
+      const pricePad = (maxP - minP) * 0.05;
+      const priceMin = minP - pricePad;
+      const priceMax = maxP + pricePad;
+      const price = priceMax - ((my - PADDING.top) / priceH) * (priceMax - priceMin);
+      onCandleClick(d, parseFloat(price.toFixed(1)));
+    }
+  }, [candleWidth, offsetX, data, onCandleClick]);
+
   return (
     <div ref={containerRef} className="tv-chart-container" style={{ position: 'relative', width: '100%', height: '100%' }}>
       <canvas
         ref={canvasRef}
         style={{ display: 'block', cursor: isDragging ? 'grabbing' : 'crosshair', width: '100%', height: '100%' }}
+        onClick={handleClick}
         onMouseMove={handleMouseMove}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
@@ -436,6 +571,14 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, orders, timeframe, on
       />
       {/* Zoom controls */}
       <div className="chart-zoom-controls">
+        <button
+          className={showC2C ? 'active' : ''}
+          onClick={onToggleC2C}
+          title={showC2C ? "Hide Close-to-Close % Labels" : "Show Close-to-Close % Labels"}
+          style={{ fontWeight: 700, minWidth: 26 }}
+        >
+          %
+        </button>
         <button onClick={() => setCandleWidth(p => Math.min(40, p * 1.2))} title="Zoom In">+</button>
         <button onClick={() => setCandleWidth(p => Math.max(2, p * 0.8))} title="Zoom Out">−</button>
         <button onClick={() => setOffsetX(o => clampOffset(o - 200, candleWidth, canvasWidth.current))} title="Scroll Left">◀</button>

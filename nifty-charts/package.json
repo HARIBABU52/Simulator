@@ -1,0 +1,33 @@
+{
+  "name": "nifty-charts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "browserslist": "^4.29.4",
+    "caniuse-lite": "^1.0.30001817",
+    "chart.js": "4.4.0",
+    "date-fns": "2.30.0",
+    "enhanced-resolve": "^5.26.0",
+    "next": "16.4.2",
+    "react": "18.2.0",
+    "react-chartjs-2": "5.2.0",
+    "react-dom": "18.2.0",
+    "recharts": "^2.9.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

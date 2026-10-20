@@ -1,0 +1,570 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+
+/* =============================
+   Design Tokens
+   ============================= */
+:root {
+  --bg-primary: #0e1117;
+  --bg-secondary: #131722;
+  --bg-panel: #1a1f2e;
+  --bg-card: #1e2537;
+  --bg-hover: #252d3d;
+  --bg-input: #0f131c;
+
+  --border: #2d3748;
+  --border-light: #374151;
+
+  --text-primary: #d1d5db;
+  --text-secondary: #9ca3af;
+  --text-dim: #6b7280;
+
+  --bull: #26a69a;
+  --bear: #ef5350;
+  --buy: #22d3ee;
+  --sell: #f97316;
+
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-dim: rgba(99,102,241,0.15);
+
+  --green: #10b981;
+  --red: #ef4444;
+  --orange: #f59e0b;
+
+  --radius: 6px;
+  --radius-lg: 10px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+/* =============================
+   Reset & Base
+   ============================= */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* =============================
+   App Layout
+   ============================= */
+.app-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.workspace {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* =============================
+   Toolbar
+   ============================= */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  height: 52px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-icon { font-size: 18px; }
+.brand-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: #f9fafb;
+  letter-spacing: -0.3px;
+}
+
+/* Timeframe buttons */
+.tf-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px;
+}
+
+.tf-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.3px;
+}
+.tf-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.tf-btn.active { background: var(--accent); color: #fff; }
+
+/* Market info */
+.market-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.market-name { font-weight: 700; color: #f9fafb; font-size: 13px; }
+.market-price { font-size: 18px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+.market-price.up { color: var(--bull); }
+.market-price.down { color: var(--bear); }
+.market-change { font-size: 12px; font-weight: 600; }
+.market-change.up { color: var(--bull); }
+.market-change.down { color: var(--bear); }
+.market-meta { font-size: 11px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
+
+/* Panel toggle */
+.panel-toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px;
+}
+.panel-toggle button {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.panel-toggle button:hover { color: var(--text-primary); background: var(--bg-hover); }
+.panel-toggle button.active { background: var(--accent); color: #fff; }
+
+/* =============================
+   Chart Area
+   ============================= */
+.chart-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #0e1117;
+}
+
+.chart-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: var(--text-dim);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Chart container */
+.tv-chart-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Zoom controls */
+.chart-zoom-controls {
+  position: absolute;
+  top: 12px;
+  right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  z-index: 5;
+}
+.chart-zoom-controls button {
+  width: 28px;
+  height: 28px;
+  background: rgba(30,37,55,0.85);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  backdrop-filter: blur(4px);
+}
+.chart-zoom-controls button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+/* =============================
+   Right Panel
+   ============================= */
+.right-panel {
+  width: 300px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+.right-panel::-webkit-scrollbar { width: 4px; }
+.right-panel::-webkit-scrollbar-track { background: transparent; }
+.right-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* =============================
+   Panel (shared)
+   ============================= */
+.panel { padding: 0 0 12px; }
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 10px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg-panel);
+  z-index: 2;
+  letter-spacing: 0.2px;
+}
+.panel-icon { font-size: 14px; }
+
+/* =============================
+   Order Form
+   ============================= */
+.order-form { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+
+.side-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.side-btn {
+  border: none;
+  border-radius: var(--radius);
+  padding: 10px 0;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.5px;
+}
+.side-btn.buy { background: rgba(38,166,154,0.15); color: var(--bull); border: 1.5px solid rgba(38,166,154,0.3); }
+.side-btn.buy.active, .side-btn.buy:hover { background: var(--bull); color: #000; border-color: var(--bull); }
+.side-btn.sell { background: rgba(239,83,80,0.15); color: var(--bear); border: 1.5px solid rgba(239,83,80,0.3); }
+.side-btn.sell.active, .side-btn.sell:hover { background: var(--bear); color: #fff; border-color: var(--bear); }
+
+/* Candle info box */
+.candle-info {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 11px;
+}
+.ci-label { display: block; color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; }
+.ci-value { display: block; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-bottom: 6px; }
+.ci-row { display: flex; gap: 10px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; }
+
+/* Form groups */
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; }
+
+.input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input:focus { border-color: var(--accent); }
+.input::placeholder { color: var(--text-dim); }
+
+.price-input-row { display: flex; flex-direction: column; gap: 6px; }
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+.checkbox-label input[type=checkbox] { accent-color: var(--accent); }
+
+.price-display {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Submit button */
+.submit-btn {
+  width: 100%;
+  border: none;
+  border-radius: var(--radius);
+  padding: 11px 0;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.15s;
+  margin-top: 2px;
+}
+.submit-btn.buy { background: var(--bull); color: #000; }
+.submit-btn.buy:hover { background: #2bbbad; }
+.submit-btn.sell { background: var(--bear); color: #fff; }
+.submit-btn.sell:hover { background: #f44336; }
+
+/* =============================
+   Orders List
+   ============================= */
+.orders-list { padding: 8px 16px; }
+.orders-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  padding: 10px 0 4px;
+  border-bottom: 1px solid var(--border);
+}
+.empty-msg {
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 12px 0;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.order-item {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  position: relative;
+  transition: border-color 0.15s;
+}
+.order-item:hover { border-color: var(--border-light); }
+.order-item.buy { border-left: 2px solid var(--bull); }
+.order-item.sell { border-left: 2px solid var(--bear); }
+
+.order-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.order-side { font-weight: 700; }
+.buy-text { color: var(--bull); }
+.sell-text { color: var(--bear); }
+.order-price { font-family: 'JetBrains Mono', monospace; color: var(--text-primary); font-weight: 600; }
+.order-qty { color: var(--text-secondary); font-family: monospace; }
+.order-status {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.order-status.filled { background: rgba(16,185,129,0.2); color: var(--green); }
+.order-status.cancelled { background: rgba(107,114,128,0.2); color: var(--text-dim); }
+.order-status.open { background: rgba(99,102,241,0.2); color: var(--accent); }
+
+.order-pnl { font-family: 'JetBrains Mono', monospace; font-weight: 700; margin-left: auto; }
+.profit { color: var(--green); }
+.loss { color: var(--red); }
+
+.order-time { color: var(--text-dim); font-size: 10px; margin-top: 3px; font-family: monospace; }
+
+.cancel-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+.cancel-btn:hover { background: rgba(239,68,68,0.2); color: var(--red); }
+
+.clear-btn {
+  margin-left: auto;
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  color: var(--red);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.clear-btn:hover { background: rgba(239,68,68,0.25); }
+
+/* =============================
+   Strategy Panel
+   ============================= */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.stat-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+}
+.stat-value.accent-green { color: var(--green); }
+.stat-value.accent-red { color: var(--red); }
+.stat-value.accent-orange { color: var(--orange); }
+
+/* Trade log */
+.trade-log { padding: 8px 16px; border-bottom: 1px solid var(--border); }
+.trade-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  margin-bottom: 4px;
+  font-size: 11px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.trade-row.win { border-left: 2px solid var(--green); }
+.trade-row.loss { border-left: 2px solid var(--red); }
+.trade-meta { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.trade-num { color: var(--text-dim); font-family: monospace; }
+.trade-qty { color: var(--text-dim); font-family: monospace; }
+.trade-pnl { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; }
+
+/* Equity curve */
+.equity-curve { padding: 8px 16px 12px; }
+.equity-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 70px;
+  padding: 0;
+  position: relative;
+  margin-top: 10px;
+}
+.equity-bar {
+  flex: 1;
+  min-width: 4px;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.3s;
+}
+.equity-bar.win { background: var(--green); opacity: 0.8; }
+.equity-bar.loss { background: var(--red); opacity: 0.8; transform: scaleY(-1); transform-origin: bottom; }
+.equity-baseline {
+  height: 1px;
+  background: var(--border);
+  margin-top: 1px;
+}
+
+/* =============================
+   Status bar
+   ============================= */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 16px;
+  height: 26px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+.hint { margin-left: auto; color: var(--text-dim); font-size: 10px; font-family: 'Inter', sans-serif; }

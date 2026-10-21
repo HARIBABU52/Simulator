@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useMemo, useCallback } from 'react';
-import { Order, OrderSide, StrategyLeg, DataPoint, Timeframe } from './types';
+import { Order, OrderSide, StrategyLeg, DataPoint, Timeframe, LOT_SIZE } from './types';
 import { useOptionChainData } from './DataContext';
 
 export interface StrategyDefinition {
@@ -390,7 +390,7 @@ export function computePayoffPoints(legs: StrategyLeg[], centerSpot: number) {
         ? Math.max(0, s - leg.strike)
         : Math.max(0, leg.strike - s);
 
-      const legPnl = (leg.side === 'BUY' ? (intrinsic - leg.price) : (leg.price - intrinsic)) * leg.qty * 25;
+      const legPnl = (leg.side === 'BUY' ? (intrinsic - leg.price) : (leg.price - intrinsic)) * leg.qty * LOT_SIZE;
       pnl += legPnl;
     }
     points.push({ spot: s, pnl });
@@ -417,7 +417,7 @@ export function computePayoffPoints(legs: StrategyLeg[], centerSpot: number) {
     const sign = leg.side === 'BUY' ? -1 : 1;
     netPremiumPoints += sign * leg.price * leg.qty;
   }
-  const netPremiumRupees = netPremiumPoints * 25;
+  const netPremiumRupees = netPremiumPoints * LOT_SIZE;
 
   return {
     points,
@@ -674,21 +674,47 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({
     return map;
   }, [chain]);
 
-  const atmStrike = useMemo(() => {
-    return Math.abs(currentPrice - 22850) < Math.abs(currentPrice - 22900) ? 22850 : 22900;
-  }, [currentPrice]);
+  const availableStrikes = useMemo(() => {
+    const s = chain.map(r => r.strike).filter(Boolean);
+    return s.length > 0 ? Array.from(new Set(s)).sort((a, b) => a - b) : [22850, 22900];
+  }, [chain]);
 
-  const itmC = 22850;
-  const otmC = 22900;
-  const itmP = 22900;
-  const otmP = 22850;
+  const atmStrike = useMemo(() => {
+    return availableStrikes.reduce((closest, curr) => {
+      return Math.abs(curr - currentPrice) < Math.abs(closest - currentPrice) ? curr : closest;
+    }, availableStrikes[0] || 22900);
+  }, [currentPrice, availableStrikes]);
+
+  const itmC = availableStrikes[0] || 22850;
+  const otmC = availableStrikes[availableStrikes.length - 1] || 22900;
+  const itmP = availableStrikes[availableStrikes.length - 1] || 22900;
+  const otmP = availableStrikes[0] || 22850;
 
   // Initialize legs on strategy selection
   const selectStrategy = useCallback((strat: StrategyDefinition) => {
     setSelectedStrategyId(strat.id);
+    setActiveComboTrackerId(null);
     const legs = strat.buildLegs(atmStrike, itmC, otmC, itmP, otmP, optionPrices);
     setConfiguredLegs(legs);
   }, [atmStrike, itmC, otmC, itmP, otmP, optionPrices]);
+
+  // Keep configured legs' LTP updated according to current simulator candle options data
+  React.useEffect(() => {
+    if (configuredLegs.length === 0) return;
+    setConfiguredLegs(prevLegs => {
+      let changed = false;
+      const updated = prevLegs.map(leg => {
+        const key = `${leg.strike}_${leg.optionType}`;
+        const newLtp = optionPrices[key];
+        if (newLtp !== undefined && newLtp > 0 && Math.abs(newLtp - leg.price) > 0.001) {
+          changed = true;
+          return { ...leg, price: newLtp };
+        }
+        return leg;
+      });
+      return changed ? updated : prevLegs;
+    });
+  }, [optionPrices]);
 
   // Initial load
   React.useEffect(() => {
@@ -718,7 +744,15 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({
   // Active combo strategy positions from placed orders
   const comboPositions = useMemo(() => {
     const openOrders = orders.filter(o => o.status === 'FILLED');
-    const groups: Record<string, { id: string; name: string; orders: Order[]; totalPnl: number }> = {};
+    const groups: Record<string, {
+      id: string;
+      name: string;
+      orders: Order[];
+      totalPnl: number;
+      startTime: string;
+      totalPlacedValue: number;
+      totalCurrentValue: number;
+    }> = {};
 
     openOrders.forEach(o => {
       const stratKey = o.strategyId || 'standalone';
@@ -728,14 +762,25 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({
           name: o.strategyName || (o.symbol || 'Option Position'),
           orders: [],
           totalPnl: 0,
+          startTime: o.time,
+          totalPlacedValue: 0,
+          totalCurrentValue: 0,
         };
       }
       groups[stratKey].orders.push(o);
       groups[stratKey].totalPnl += (o.pnl || 0);
+
+      const placedVal = o.price * o.qty * LOT_SIZE;
+      const key = `${o.strike}_${o.optionType}`;
+      const liveLtp = optionPrices[key] ?? o.currentPrice ?? o.price;
+      const currentVal = liveLtp * o.qty * LOT_SIZE;
+
+      groups[stratKey].totalPlacedValue += placedVal;
+      groups[stratKey].totalCurrentValue += currentVal;
     });
 
     return Object.values(groups);
-  }, [orders]);
+  }, [orders, optionPrices]);
 
   // One-click combo order execution
   const handleExecuteAllComboOrders = () => {
@@ -917,6 +962,13 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({
                   {activeComboTrackerId ? 'Live Combo Position' : currentStrategyDef.name}
                 </span>
                 <span className="config-leg-count">({configuredLegs.length} Legs)</span>
+                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                  📅 Sim Date: <strong style={{ color: '#cbd5e1' }}>
+                    {currentCandle ? new Date(currentCandle.time).toLocaleString('en-IN', {
+                      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                    }) : 'Live'}
+                  </strong>
+                </div>
               </div>
               <button className="add-leg-btn" onClick={handleAddCustomLeg}>
                 + Add Leg
@@ -933,6 +985,7 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({
                     <th>Type</th>
                     <th>Lots</th>
                     <th>LTP (₹)</th>
+                    <th>Placed Val (×65)</th>
                     <th>✕</th>
                   </tr>
                 </thead>
@@ -962,8 +1015,9 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({
                             } : l));
                           }}
                         >
-                          <option value={22850}>22850</option>
-                          <option value={22900}>22900</option>
+                          {availableStrikes.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
                         </select>
                       </td>
                       <td>
@@ -980,6 +1034,9 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({
                       </td>
                       <td className="leg-price-val">
                         ₹{leg.price.toFixed(2)}
+                      </td>
+                      <td className="leg-val-65" style={{ fontFamily: 'monospace', fontWeight: 600, color: '#38bdf8' }}>
+                        ₹{Math.round(leg.price * leg.qty * LOT_SIZE).toLocaleString()}
                       </td>
                       <td>
                         <button
@@ -1079,18 +1136,96 @@ export const StrategyPanel: React.FC<StrategyPanelProps> = ({
                       </div>
                       <div className="combo-pnl-group">
                         <span className={`combo-pnl ${combo.totalPnl >= 0 ? 'bull' : 'bear'}`}>
-                          {combo.totalPnl >= 0 ? '+' : ''}₹{Math.round(combo.totalPnl).toLocaleString()}
+                          Net: {combo.totalPnl >= 0 ? '+' : ''}₹{Math.round(combo.totalPnl).toLocaleString()}
                         </span>
                       </div>
                     </div>
 
-                    <div className="combo-legs-preview">
-                      {combo.orders.map((o, idx) => (
-                        <span key={idx} className="combo-leg-chip">
-                          <strong className={o.side === 'BUY' ? 'bull' : 'bear'}>{o.side}</strong>{' '}
-                          {o.qty}L {o.symbol} @ ₹{o.price.toFixed(1)}
-                        </span>
-                      ))}
+                    {/* Start Date & Current Simulator Time */}
+                    <div className="combo-start-line" style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '11px',
+                      color: '#94a3b8',
+                      padding: '4px 8px',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.04)'
+                    }}>
+                      <span>
+                        📅 <strong>Start Date:</strong> {new Date(combo.startTime).toLocaleString('en-IN', {
+                          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                        })}
+                      </span>
+                      <span>
+                        📍 <strong>Current:</strong> {currentCandle ? new Date(currentCandle.time).toLocaleTimeString('en-IN', {
+                          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                        }) : '--'}
+                      </span>
+                    </div>
+
+                    {/* Strategy Totals: Placed Value, Updated Value, Net P&L */}
+                    <div className="combo-values-summary" style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '6px',
+                      padding: '6px 8px',
+                      background: 'rgba(15, 23, 42, 0.5)',
+                      fontSize: '11px',
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.04)'
+                    }}>
+                      <div>
+                        <div style={{ color: '#64748b', fontSize: '10px' }}>Placed Val (×65)</div>
+                        <strong style={{ color: '#e2e8f0' }}>₹{Math.round(combo.totalPlacedValue).toLocaleString()}</strong>
+                      </div>
+                      <div>
+                        <div style={{ color: '#64748b', fontSize: '10px' }}>Updated Val (×65)</div>
+                        <strong style={{ color: '#38bdf8' }}>₹{Math.round(combo.totalCurrentValue).toLocaleString()}</strong>
+                      </div>
+                      <div>
+                        <div style={{ color: '#64748b', fontSize: '10px' }}>Net P&L</div>
+                        <strong className={combo.totalPnl >= 0 ? 'bull' : 'bear'}>
+                          {combo.totalPnl >= 0 ? '+' : ''}₹{Math.round(combo.totalPnl).toLocaleString()}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {/* Leg Details Preview */}
+                    <div className="combo-legs-preview" style={{ padding: '6px 8px' }}>
+                      {combo.orders.map((o, idx) => {
+                        const key = `${o.strike}_${o.optionType}`;
+                        const liveLtp = optionPrices[key] ?? o.currentPrice ?? o.price;
+                        const legPts = (o.side === 'BUY' ? 1 : -1) * (liveLtp - o.price);
+                        const legPnl = legPts * o.qty * LOT_SIZE;
+                        const placedLegVal = o.price * o.qty * LOT_SIZE;
+                        const updatedLegVal = liveLtp * o.qty * LOT_SIZE;
+
+                        return (
+                          <div key={idx} className="combo-leg-item" style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontSize: '11px',
+                            padding: '4px 0',
+                            borderBottom: idx < combo.orders.length - 1 ? '1px dashed rgba(255, 255, 255, 0.05)' : 'none'
+                          }}>
+                            <div>
+                              <strong className={o.side === 'BUY' ? 'bull' : 'bear'}>{o.side}</strong>{' '}
+                              <span>{o.qty}L {o.symbol}</span>
+                              <span style={{ color: '#94a3b8', marginLeft: '4px' }}>@ ₹{o.price.toFixed(1)}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <span>Placed: <strong style={{ color: '#e2e8f0' }}>₹{Math.round(placedLegVal).toLocaleString()}</strong></span>
+                              <span>LTP: <strong style={{ color: '#38bdf8' }}>₹{liveLtp.toFixed(1)}</strong></span>
+                              <span>Updated: <strong style={{ color: '#38bdf8' }}>₹{Math.round(updatedLegVal).toLocaleString()}</strong></span>
+                              <span className={legPnl >= 0 ? 'bull' : 'bear'} style={{ fontWeight: 700 }}>
+                                Net: {legPnl >= 0 ? '+' : ''}₹{Math.round(legPnl).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <div className="combo-actions">

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { Order, OrderSide, DataPoint } from './types';
+import { Order, OrderSide, DataPoint, LOT_SIZE } from './types';
 
 interface OrderPanelProps {
   selectedCandle: DataPoint | null;
@@ -228,10 +228,25 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
                 </span>
               )}
             </div>
+            <div className="order-values-row" style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '11px',
+              padding: '4px 6px',
+              margin: '3px 0',
+              background: 'rgba(255, 255, 255, 0.03)',
+              borderRadius: '4px',
+              border: '1px solid rgba(255, 255, 255, 0.05)'
+            }}>
+              <span>Placed: <strong style={{ color: '#e2e8f0' }}>₹{Math.round(o.price * o.qty * LOT_SIZE).toLocaleString()}</strong></span>
+              <span>Updated: <strong style={{ color: '#38bdf8' }}>₹{Math.round((o.currentPrice ?? o.price) * o.qty * LOT_SIZE).toLocaleString()}</strong></span>
+              <span>Net: <strong className={(o.pnl || 0) >= 0 ? 'profit' : 'loss'}>{(o.pnl || 0) >= 0 ? '+' : ''}₹{Math.round(o.pnl || 0).toLocaleString()}</strong></span>
+            </div>
             <div className="order-time-row">
-              <span className="order-time">
-                {new Date(o.time).toLocaleString('en-IN', {
-                  day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+              <span className="order-time" title="Order Start Date & Time">
+                📅 Start: {new Date(o.time).toLocaleString('en-IN', {
+                  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
                 })}
               </span>
               {o.status === 'FILLED' && onCloseOrder && (

@@ -148,7 +148,7 @@ export const OptionChain: React.FC<OptionChainProps> = ({
       id: `opt_${Date.now()}_${strike}_${type}`,
       side,
       price,
-      qty: 1, // 1 lot = 25 qty
+      qty: 1, // 1 lot = 65 qty
       time: orderTime,
       status: 'FILLED',
       symbol,

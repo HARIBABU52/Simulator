@@ -1,10 +1,10 @@
 "use client";
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { DataProvider, useTimeframeCandles } from './DataContext';
+import { DataProvider, useTimeframeCandles, useOptionChainData } from './DataContext';
 import TradingChart from './TradingChart';
 import OrderPanel from './OrderPanel';
 import StrategyPanel from './StrategyPanel';
-import { DataPoint, Order, Timeframe } from './types';
+import { DataPoint, Order, Timeframe, LOT_SIZE } from './types';
 import { TanStackCacheButton } from './TanStackCacheModal';
 import OptionChain from './OptionChain';
 
@@ -44,25 +44,54 @@ function SimulatorApp() {
   const currentCandle = displayData[displayData.length - 1];
   const currentPrice = currentCandle ? currentCandle.close : (chartData[chartData.length - 1]?.close ?? 0);
 
-  // Real-time P&L for placed orders based on current replay/live candle
+  // Active candle and price (tracks replay candle, or selected clicked candle, or latest)
+  const activeCandle = isReplayActive ? currentCandle : (selectedCandle || currentCandle);
+  const activePrice = activeCandle ? activeCandle.close : currentPrice;
+
+  // Live options data for current active candle time
+  const { chain: liveOptionChain } = useOptionChainData({
+    timeframe,
+    currentCandle: activeCandle,
+    isReplayActive,
+    currentPrice: activePrice,
+  });
+
+  const optionPriceMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    liveOptionChain.forEach(row => {
+      if (row.strike) {
+        if (row.ce && row.ce.ltp > 0) map[`${row.strike}_CE`] = row.ce.ltp;
+        if (row.pe && row.pe.ltp > 0) map[`${row.strike}_PE`] = row.pe.ltp;
+      }
+    });
+    return map;
+  }, [liveOptionChain]);
+
+  // Real-time P&L for placed orders based on current replay/live candle and option LTPs
   const liveOrders = useMemo(() => {
     return orders.map(order => {
       if (order.status === 'CLOSED' || order.status === 'CANCELLED') {
         return order;
       }
-      if (order.status === 'FILLED' && currentPrice) {
-        const pts = (order.side === 'BUY' ? 1 : -1) * (currentPrice - order.price);
-        // NIFTY 1 lot = 25 qty; ₹ PnL = pts * qty * 25
-        const pnl = pts * order.qty * 25;
+      if (order.status === 'FILLED') {
+        let currentLtp = activePrice;
+        if (order.strike && order.optionType) {
+          const key = `${order.strike}_${order.optionType}`;
+          currentLtp = optionPriceMap[key] ?? order.price;
+        }
+        const pts = (order.side === 'BUY' ? 1 : -1) * (currentLtp - order.price);
+        // NIFTY 1 lot = 65 qty; ₹ PnL = pts * qty * 65
+        const pnl = pts * order.qty * LOT_SIZE;
         return {
           ...order,
+          currentPrice: currentLtp,
           pnl,
           pnlPoints: pts,
         };
       }
       return order;
     });
-  }, [orders, currentPrice]);
+  }, [orders, activePrice, optionPriceMap]);
 
   // Replay Auto-Playback timer
   useEffect(() => {
@@ -114,17 +143,16 @@ function SimulatorApp() {
   }, [chartData]);
 
   const handleCandleClick = useCallback((candle: DataPoint, price: number) => {
-    if (isSelectingBar) {
+    setSelectedCandle(candle);
+    setClickedPrice(price);
+    if (isReplayActive || isSelectingBar) {
       const idx = chartData.findIndex(d => d.time === candle.time);
       if (idx !== -1) {
         setReplayIndex(idx);
         setIsSelectingBar(false);
       }
-      return;
     }
-    setSelectedCandle(candle);
-    setClickedPrice(price);
-  }, [isSelectingBar, chartData]);
+  }, [isReplayActive, isSelectingBar, chartData]);
 
   const handleAddOrder = useCallback((order: Order) => {
     setOrders(prev => [...prev, order]);
@@ -137,18 +165,23 @@ function SimulatorApp() {
   const handleCloseOrder = useCallback((id: string) => {
     setOrders(prev => prev.map(o => {
       if (o.id !== id || o.status !== 'FILLED') return o;
-      const pts = (o.side === 'BUY' ? 1 : -1) * (currentPrice - o.price);
-      const pnl = pts * o.qty * 25;
+      let exitLtp = activePrice;
+      if (o.strike && o.optionType) {
+        const key = `${o.strike}_${o.optionType}`;
+        exitLtp = optionPriceMap[key] ?? o.price;
+      }
+      const pts = (o.side === 'BUY' ? 1 : -1) * (exitLtp - o.price);
+      const pnl = pts * o.qty * LOT_SIZE;
       return {
         ...o,
         status: 'CLOSED' as const,
-        exitPrice: currentPrice,
-        exitTime: currentCandle?.time ?? new Date().toISOString(),
+        exitPrice: exitLtp,
+        exitTime: activeCandle?.time ?? new Date().toISOString(),
         pnl,
         pnlPoints: pts,
       };
     }));
-  }, [currentPrice, currentCandle]);
+  }, [activePrice, activeCandle, optionPriceMap]);
 
   const handleCancelOrder = useCallback((id: string) => {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'CANCELLED' as const } : o));
@@ -382,8 +415,8 @@ function SimulatorApp() {
           {/* Authentic Indian Option Chain below chart */}
           {showOptionChain && (
             <OptionChain
-              currentPrice={currentPrice}
-              currentCandle={currentCandle}
+              currentPrice={activePrice}
+              currentCandle={activeCandle}
               timeframe={timeframe}
               onClose={() => setShowOptionChain(false)}
               onAddOrder={handleAddOrder}
@@ -403,8 +436,8 @@ function SimulatorApp() {
               onCancelOrder={handleCancelOrder}
               onCloseOrder={handleCloseOrder}
               onStartReplayFromCandle={handleStartReplayFromCandle}
-              currentPrice={currentPrice}
-              currentCandle={currentCandle}
+              currentPrice={activePrice}
+              currentCandle={activeCandle}
               isReplayActive={isReplayActive}
             />
           ) : (
@@ -414,8 +447,8 @@ function SimulatorApp() {
               onAddOrder={handleAddOrder}
               onAddOrders={handleAddOrders}
               onCloseOrder={handleCloseOrder}
-              currentPrice={currentPrice}
-              currentCandle={currentCandle}
+              currentPrice={activePrice}
+              currentCandle={activeCandle}
               timeframe={timeframe}
               isReplayActive={isReplayActive}
               isExpanded={isStrategyExpanded}

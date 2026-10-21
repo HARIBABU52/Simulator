@@ -438,8 +438,8 @@ export function getOptionChainFromCache(
   const pcr = totalCeVolume > 0 ? round2(totalPeVolume / totalCeVolume) : 1;
 
   const simulatedEnv: SimulatedEnvInfo = {
-    activeDate: activeDate || '2026-10-19',
-    activeTime: activeTime || '2026-10-19T10:09:00.000Z',
+    activeDate: targetTime ? targetTime.slice(0, 10) : (activeDate || '2026-10-19'),
+    activeTime: targetTime || activeTime || '2026-10-19T10:09:00.000Z',
     spotPrice: spot,
     atmStrike,
     timeframe: tf,

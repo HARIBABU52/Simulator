@@ -101,7 +101,7 @@ export function useOptionChainData({
   const { data: cache, isLoading } = useExpiryOptionsCache(activeExpiry);
 
   const spotVal = currentPrice > 0 ? Math.round(currentPrice * 100) / 100 : 22888.95;
-  const targetTime = isReplayActive && currentCandle?.time ? currentCandle.time : undefined;
+  const targetTime = currentCandle?.time || undefined;
 
   // Retrieve instantaneous snapshot directly from TanStack state in <0.001ms
   const result = useMemo(() => {

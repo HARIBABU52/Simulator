@@ -23,13 +23,17 @@
     "recharts": "^2.9.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@next/eslint-plugin-next": "^16.4.2",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "ajv": "^6.12.6",
     "eslint": "^9",
-    "eslint-config-next": "16.4.2",
+    "eslint-config-next": "^16.4.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "uri-js": "^4.4.1"
   }
 }

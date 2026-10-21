@@ -1,4 +1,5 @@
 // Shared types
+export const LOT_SIZE = 65;
 
 export type DataPoint = {
   time: string; // ISO string
@@ -24,6 +25,7 @@ export type Order = {
   status: OrderStatus;
   pnl?: number; // current unrealized or realized pnl (in ₹)
   pnlPoints?: number; // pnl in index points
+  currentPrice?: number; // current marked price / option LTP
   exitPrice?: number;
   exitTime?: string;
   symbol?: string;

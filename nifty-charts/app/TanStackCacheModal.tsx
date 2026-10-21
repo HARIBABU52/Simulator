@@ -46,14 +46,17 @@ export function TanStackCacheButton({ currentTimeframe }: { currentTimeframe: Ti
   const queryClient = useQueryClient();
   const [, setTick] = useState(0);
 
-  // Subscribe to TanStack Query Cache events so states re-render reactively (deferred to avoid setState during render)
+  // Subscribe to TanStack Query Cache events without infinite re-render loop
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    const unsubscribe = queryClient.getQueryCache().subscribe(() => {
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        setTick(t => t + 1);
-      }, 0);
+    const unsubscribe = queryClient.getQueryCache().subscribe(event => {
+      // Only react to actual data updates, not observer creation or query mounts
+      if (event?.type === 'updated') {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          setTick(t => t + 1);
+        }, 500);
+      }
     });
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
